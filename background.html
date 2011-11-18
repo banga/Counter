@@ -1,0 +1,179 @@
+<html>
+	<head>
+		<script src="page_gray.js" type="text/javascript"></script>
+		<script type="text/javascript">
+			/* Default values */
+			var defaultHours = 6, defaultCount = 20, defaultWaitTime = 10;
+			var defaultExcludeURLs = {"https?://\\w*\\.google\\.com": true, "^https?://\\w*\\.facebook\\.com": false, "http://www\\.reddit\\.com": false};
+
+			var tabCounts = {};
+			var urlRegEx = /^http[s]?:\/\/[a-zA-Z0-9\-]+[\.]?[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-\.]+/;
+			var baseUrlRegEx = /[a-zA-Z0-9\-]+[\.]?[a-zA-Z0-9\-]+\.[a-zA-Z0-9\-\.]+/;
+
+			function DBG(str) {
+				/*console.log(str);*/
+			}
+
+			/* Reset icon while current tab is changing */
+			function resetIcon() {
+				chrome.browserAction.setIcon({"path": "icon.png"});
+				chrome.browserAction.setBadgeText({"text": "..."});
+				chrome.browserAction.setBadgeBackgroundColor({"color": [0, 255, 0, 255]});
+				chrome.browserAction.setTitle("An extension that counts");
+			}
+
+			/* If the focus changes to another window, count again */
+			chrome.windows.onFocusChanged.addListener(function(windowId) {
+				if(windowId != chrome.windows.WINDOW_ID_NONE)
+				chrome.tabs.getSelected(windowId, countVisits);
+			});
+
+			/* If a tab is updated, count again */
+			chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
+				DBG("Tab " + tab.id + " updating");
+				if(changeInfo.status == "complete") {
+					DBG("Tab " + tab.id + " update complete");
+					delete tabCounts[tab.id];
+					countVisits(tab);
+					} else {
+					resetIcon();
+				}
+			});
+
+			/* If user switches to another tab, count again */
+			chrome.tabs.onSelectionChanged.addListener(function(tabId, selectInfo) {
+				chrome.tabs.getSelected(selectInfo.windowId, countVisits);
+			});
+
+			/* 
+			Count the number of visits to the url of this tab 
+			Currently using the chrome.history.search api to count the visits.
+			This is a little slow because of the large number of results returned.
+			*/
+			function countVisits(tab) {
+				if(!tab || tabCounts[tab.id])
+					return;
+
+				/* Allow users to exclude some URLs */
+				var excludeURLs = (localStorage.excludeURLs ? JSON.parse(localStorage.excludeURLs) : defaultExcludeURLs);
+				for(url in excludeURLs) {
+					if(excludeURLs[url] && tab.url.match(new RegExp(url))) {
+						chrome.browserAction.setTitle({title: tab.url + " matches excluded url " + url, tabId: tab.id});
+						chrome.browserAction.setBadgeText({text: "", tabId: tab.id});
+						return;
+					}
+				}
+
+				/* Reg-exp to extract the url */
+				var baseURL = tab.url.match(urlRegEx);
+				if(!baseURL || baseURL.length < 1) {
+					DBG("Invalid URL: " + tab.url);
+					return;
+				}
+				baseURL = baseURL[0];
+				DBG(baseURL);
+
+				/* Added to ignore 'http[s]://' */
+				var shortURL = baseURL.match(baseUrlRegEx);
+				if(!shortURL || shortURL.length < 1) {
+					DBG("Invalid short URL: " + tab.url);
+					return;
+				}
+				shortURL = shortURL[0];
+				DBG(shortURL);
+
+				chrome.history.getVisits({"url": baseURL},
+				function(items) {
+					countVisitsAndBlock(items, tab, shortURL);
+				}
+				);
+				chrome.browserAction.setIcon({"path": tab.favIconUrl, "tabId": tab.id});
+			}
+
+			function countVisitsAndBlock(items, tab, url) {
+				DBG("countVisitsAndBlock called for " + url + " on tab " + tab.id);
+
+				/* Time duration for which the number of visits are counted */
+				var microsToCheck = 1000 * 60 * 60 * (localStorage.hoursToCheck || defaultHours);
+				var maxCount = (localStorage.maxCount || defaultCount);
+				var waitTime = (localStorage.waitTime || defaultWaitTime);
+				var startTime = (new Date).getTime() - microsToCheck;
+
+				var count = 0;
+				for(i = 0; i < items.length; i++)
+				if(items[i].visitTime && items[i].visitTime >= startTime)
+				count++;
+
+				/* Display the count along with the icon */
+				var str = "";
+				var col = [255, 0, 0, 255];
+				if(count >= 1000) {
+					if(count >= 1000000) {
+						str = "" + (count / 1000000).toFixed(1) + "m";
+						} else {
+						str = "" + (count / 1000).toFixed(1) + "k";
+					}
+					} else {
+					str = "" + count;
+				}
+				chrome.browserAction.setBadgeText({"text": str, "tabId": tab.id});
+				chrome.browserAction.setBadgeBackgroundColor({"color": col, "tabId": tab.id});
+				chrome.browserAction.setTitle({title: "You have visited " + url + " " + count + " times", tabId: tab.id});
+				tabCounts[tab.id] = count;
+
+				DBG(count);
+				_gaq.push(['_trackEvent', url, 'visited']);
+
+				/* Block the user from accessing the page's contents if count is too high */
+				chrome.tabs.executeScript(tab.id, {"file": "page_gray.js"}, function() {
+					if(count > maxCount) {
+						var request = {
+							'block': true,
+							'count': count,
+							'url': url,
+							'options': {
+								'wait': waitTime*1000
+							}
+						};
+						DBG("Sending request: " + request);
+						chrome.tabs.sendRequest(tab.id, request,
+						function(response) {
+							DBG(response);
+						}
+						);
+						_gaq.push(['_trackEvent', url, 'blocked']);
+						} else {
+						chrome.tabs.sendRequest(tab.id, {'block': false},
+						function(response) {
+							DBG(response);
+						}
+						);
+					}
+				});
+			}
+
+			function excludeThisPage() {
+				chrome.tabs.getSelected(null, function(tab) {
+					var excludeURLs = localStorage.excludeURLs ? JSON.parse(localStorage.excludeURLs) : defaultExcludeURLs;
+					excludeURLs[tab.url] = true;
+					localStorage.excludeURLs = JSON.stringify(excludeURLs);
+					DBG(localStorage.excludeURLs);
+				});
+			}
+
+		</script>
+	</head>
+	<body>
+		<script type="text/javascript">
+			var _gaq = _gaq || [];
+			_gaq.push(['_setAccount', 'UA-22382417-1']);
+			_gaq.push(['_trackPageview']);
+
+			(function() {
+				var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+				ga.src = 'https://ssl.google-analytics.com/ga.js';
+				var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+			})();
+		</script>
+	</body>
+</html>

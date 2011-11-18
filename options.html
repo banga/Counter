@@ -1,0 +1,111 @@
+<html>
+<head>
+	<link href='http://fonts.googleapis.com/css?family=Ubuntu' rel='stylesheet' type='text/css'>
+	<title>Counter options</title>
+	<script>
+	/* Time duration for which the number of visits are counted */
+	var defaultHours = 6, minHours = 1;
+	var defaultCount = 20, minCount = 5;
+	var defaultWaitTime = 10, minWaitTime = 10;
+	var defaultExcludeURLs = {"^https?://\\w*\\.google\\.com": true, "^https?://\\w*\\.facebook\\.com": false, "^http://www\\.reddit\\.com": false};
+
+	function loadOptions() {
+		var hoursToCheck = localStorage.hoursToCheck;
+		if(hoursToCheck == undefined || hoursToCheck < minHours)
+			hoursToCheck = defaultHours;
+		document.getElementById("hoursToCheck").value = hoursToCheck;
+
+		var maxCount = localStorage.maxCount;
+		if(maxCount == undefined || maxCount < minCount)
+			maxCount = defaultCount;
+		document.getElementById("maxCount").value = maxCount;
+
+		var waitTime = localStorage.waitTime;
+		if(waitTime == undefined || waitTime < minWaitTime)
+			waitTime = defaultWaitTime;
+		document.getElementById("waitTime").value = waitTime;
+
+		var excludeURLs = (localStorage.excludeURLs ? JSON.parse(localStorage.excludeURLs) : defaultExcludeURLs);
+		var urlListDiv = document.getElementById("excludeURLList");
+		urlListDiv.innerHTML = "";
+
+		console.log(excludeURLs);
+		for(url in excludeURLs)
+			insertExcludeURL(url, excludeURLs[url]);
+	}
+	function saveOptions() {
+		var hoursToCheck = parseInt(document.getElementById("hoursToCheck").value);
+		if(hoursToCheck != hoursToCheck || hoursToCheck < minHours)
+			hoursToCheck = defaultHours;
+		localStorage.hoursToCheck = hoursToCheck;
+
+		var maxCount = parseInt(document.getElementById("maxCount").value);
+		if(maxCount != maxCount || maxCount < minCount)
+			maxCount = defaultCount;
+		localStorage.maxCount = maxCount;
+
+		var waitTime = parseInt(document.getElementById("waitTime").value);
+		if(waitTime != waitTime || waitTime < minWaitTime)
+			waitTime = defaultWaitTime;
+		localStorage.waitTime = waitTime;
+
+		console.log(localStorage);
+
+		var excludeURLs = {};
+		var urlInputs = document.getElementById("excludeURLList").getElementsByTagName("input");
+		for(i = 0; i < urlInputs.length; i++)
+			excludeURLs[urlInputs[i].value] = urlInputs[i].checked;
+		localStorage.excludeURLs = JSON.stringify(excludeURLs);
+
+		loadOptions();
+	}
+	function defaultOptions() {
+		localStorage.removeItem("hoursToCheck");
+		localStorage.removeItem("maxCount");
+		localStorage.removeItem("waitTime");
+		localStorage.removeItem("excludeURLs");
+
+		loadOptions();
+	}
+	function insertExcludeURL(url, isChecked) {
+		var urlDiv = document.createElement("div");
+		urlDiv.innerHTML = "<input type = 'checkbox' " + (isChecked ? "checked = 'checked' " : "") + "value = '" + url + "'/>" + url + "<br/>";
+
+		var urlListDiv = document.getElementById("excludeURLList");
+		urlListDiv.appendChild(urlDiv);
+	}
+	</script>
+</head>
+<body onload="loadOptions()" style="font-family: 'Ubuntu';">
+<center>
+	<table cellspacing="20px" style="background-color: #ACF; font-size: 12px">
+	<tr>
+		<td align = "center" colspan="2"><div style="font-size: 40px">Counter Options</div></td>
+	</tr>
+	<tr>
+		<td>Hours to remember:</td>
+		<td><input type="text" size="3" id="hoursToCheck"/></td>
+	</tr>
+	<tr>
+		<td>Maximum visits allowed:</td>
+		<td><input type="text" size="3" id="maxCount"/> </td>
+	</tr>
+	<tr>
+		<td>Waiting time:</td>
+		<td><input type="text" size="3" id="waitTime"/> seconds</td>
+	<tr>
+		<td valign="top">Exclude these URLs:</td>
+		<td>
+			<div id="excludeURLList" style="font-size:12px"></div>
+			<input type="text" id="excludeURL"/><button onclick="insertExcludeURL(document.getElementById('excludeURL').value, true)">Add</button>
+			<br/>Use simple URLs or javascript style regular expressions
+		</td>
+	</ul>
+	<tr>
+		<td align="center"><button onclick="saveOptions()">Save</button></td>
+		<td align="center"><button onclick="defaultOptions()">Defaults</button></td>
+	</tr>
+	</table>
+</center>
+</body>
+</html>

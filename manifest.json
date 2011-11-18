@@ -1,0 +1,17 @@
+{
+  "name": "Counter",
+  "description": "An extension that counts your visits to sites and blocks you from visiting them too often.",
+  "version": "1.4",
+  "permissions": ["tabs", "history", "http://*/*", "https://*/*"],
+  "background_page": "background.html",
+  "options_page": "options.html",
+  "browser_action": {
+	"default_icon": "icon.png",
+    "default_title": "An extension that counts"
+  },
+  "icons": { 
+			"16": "icon16.png",
+			"48": "icon48.png",
+			"128": "icon128.png" 
+  }
+}

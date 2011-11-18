@@ -1,0 +1,6 @@
+Counter is a Google Chrome extension that counts your visits to each site and optionally blocks you out for a few seconds. Maximum visits, timeout duration and URLs to monitor are easily configurable.
+
+This extension is based on this xkcd strip: http://xkcd.com/862/
+
+--
+Shrey Banga
